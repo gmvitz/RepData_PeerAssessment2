@@ -11,6 +11,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Synopsis
 
+The data set represents NOAA storm information on damages that resulted from storms in the US. A quick exploratory data analysis shows that tornadoes have the most recorded fatalities and injuries in the data set. Interestingly, Excessive heat is also a leading cause of mortalities. When looking at the cost of damages associated with these storms, Tornadoes, hurricanes, and storms cause the most economic harm. Specifically, wind and hail appear often as factors that likely contribute to damage. 
+
 ## Data Processing
 Load packages, data, and check size to see if results need to be cached.
 
@@ -35,14 +37,35 @@ Format the date column
 clean <- data %>% 
     mutate(date = date(mdy_hms(BGN_DATE)))
 ```
+Format the damage column
+```{r}
+clean %>% count(PROPDMGEXP) %>% arrange(-n)
+```
+convert damage values based off of EXP values.
+Using information from [LINK](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) Page number 12. Only converting letters as other variables are unknown based off of documentation.
+
+```{r}
+clean <- clean %>% 
+    mutate(damage_prop = case_when(
+            PROPDMGEXP %in% c("k", "K") ~ PROPDMG*1000,
+            PROPDMGEXP %in% c("m", "M") ~ PROPDMG*1000000,
+            PROPDMGEXP %in% c("b", "B") ~ PROPDMG*1000000000,
+            TRUE ~ PROPDMG^1),
+           damage_crop = case_when(
+            CROPDMGEXP %in% c("k", "K") ~ CROPDMG*1000,
+            CROPDMGEXP %in% c("m", "M") ~ CROPDMG*1000000,
+            CROPDMGEXP %in% c("b", "B") ~ CROPDMG*1000000000,
+            TRUE ~ CROPDMG^1))
+```
+
 
 ## Analysis Results
-
+### Question 1
 We are interested in the EVTYPE, FATALITIES, and INJURIES for the first question:
 Q1: Across the United States, which types of events are most harmful with respect to population health?
 
 ```{r}
-distinct(clean, EVTYPE)
+count(distinct(clean, EVTYPE))
 ```
 985 Distinct values for EVTYPE
 
@@ -79,3 +102,29 @@ plot_impact
 ```
 
 Tornadoes are the most fatal, and cause the most injuries across the US for the entire dataset.
+
+### Question 2
+We are interested in PROPDMG, PROPDMGEXP, CROPDMG, CROPDMGEXP to answer the second question. Already converted damage calculations in data processing above.
+
+
+
+```{r}
+dmg_info <- clean %>% 
+    select(EVTYPE, damage_prop, damage_crop) %>% 
+    mutate(damage = damage_prop + damage_crop) %>% 
+    group_by(EVTYPE) %>% 
+    summarize(avg_damage = mean(damage)) %>% 
+    ungroup() %>% 
+    slice_max(avg_damage, n = 20)
+
+dmg_info$EVTYPE <- as.factor(dmg_info$EVTYPE)
+dmg_info$EVTYPE <- fct_reorder(dmg_info$EVTYPE, dmg_info$avg_damage)
+
+plot_damage <- dmg_info %>% 
+    ggplot(aes(EVTYPE, avg_damage)) +
+    geom_col() +
+    coord_flip()
+
+plot_damage
+```
+
