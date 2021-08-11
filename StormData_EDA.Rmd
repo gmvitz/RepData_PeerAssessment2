@@ -1,0 +1,81 @@
+---
+title: "EDA of NOAA Storm Database"
+author: "Gregory Vitz"
+date: "8/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Synopsis
+
+## Data Processing
+Load packages, data, and check size to see if results need to be cached.
+
+```{r load packages}
+library(tidyverse)
+library(lubridate)
+```
+
+
+```{r load data}
+data <- read.csv("data/repdata_data_StormData.csv.bz2")
+
+object.size(data)
+```
+Data is ~ `r format(object.size(data), units = "GB")`, no need to cache
+
+```{r}
+glimpse(data)
+```
+Format the date column
+```{r}
+clean <- data %>% 
+    mutate(date = date(mdy_hms(BGN_DATE)))
+```
+
+## Analysis Results
+
+We are interested in the EVTYPE, FATALITIES, and INJURIES for the first question:
+Q1: Across the United States, which types of events are most harmful with respect to population health?
+
+```{r}
+distinct(clean, EVTYPE)
+```
+985 Distinct values for EVTYPE
+
+```{r}
+summary(clean$FATALITIES)
+```
+```{r}
+summary(data$INJURIES)
+```
+
+```{r}
+health <- clean %>% 
+    select(EVTYPE, FATALITIES, INJURIES) %>% 
+    pivot_longer(!EVTYPE, names_to = "health_impact", values_to = "number_of") %>% 
+    group_by(EVTYPE, health_impact) %>%
+    summarise(number_of = sum(number_of)) %>%
+    group_by(EVTYPE) %>% 
+    mutate(total_impact = sum(number_of)) %>%
+    ungroup()
+
+health$EVTYPE <- as.factor(health$EVTYPE)
+health$EVTYPE <- fct_reorder(health$EVTYPE, health$total_impact)
+
+
+# cut to top 30 event types by damage
+plot_impact <- health %>% 
+    slice_max(total_impact, n = 30) %>%
+    ggplot(aes(EVTYPE, number_of)) +
+    geom_col(aes(fill = health_impact), position = "stack") +
+    coord_flip() +
+    facet_wrap(~health_impact, ncol = 1, scales = "free_x")
+
+plot_impact
+```
+
+Tornadoes are the most fatal, and cause the most injuries across the US for the entire dataset.
